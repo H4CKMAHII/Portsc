@@ -12,7 +12,12 @@ A lightning-fast ⚡ and efficient port scanner written in Python. It scans targ
 - 🏷 Grabs banners for common services like HTTP and SSH.  
 - 💾 Saves scan results to a JSON file (`scan_results.json`).
 
+## 📸 Screenshot of Port Scanner
 
+
+<p align="center">
+  <img src="port++.png" alt="Port Scanner Screenshot" width="600">
+</p>
 
 ## 🛠 Installation  
 1. Clone the repository:  
