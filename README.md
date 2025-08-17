@@ -11,9 +11,12 @@ A lightning-fast ⚡ and efficient port scanner written in Python. It scans targ
 
 
 
+## 📸 Screenshot of Port Scanner
 
-## 🖼 Screenshot  
-![Example Scan Output](screenshot.png) *(Optional: Add a screenshot if you have one.)*
+
+<p align="center">
+  <img src="portsc++.png" alt="Port Scanner Screenshot" width="600">
+</p>
 
 ## 🛠 Installation  
 1. Clone the repository:  
