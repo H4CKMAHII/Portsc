@@ -24,7 +24,7 @@ def show_banner() -> None:
     f = Figlet(font=random.choice(Figlet().getFonts()))
     ascii_art = f.renderText(BANNER_TEXT)
     print(colored(ascii_art, random.choice(COLORS)))
-    print(colored("CREATED BY H4CKMAHII", "cyan"))
+    print(colored("CREATED BY MAHESH", "cyan"))
     print("-" * 60)
 
 # Validate target (IP or domain)
@@ -52,20 +52,38 @@ def parse_ports(port_str: str) -> List[int]:
             ports.add(int(part))
     return sorted(ports)
 
-# Service and version detection
-def detect_service(port: int) -> Tuple[str, Optional[str]]:
+# Service and version detection (TCP)
+def detect_service(port: int, protocol: str = "tcp") -> Tuple[str, Optional[str]]:
     try:
-        service = socket.getservbyport(port)
-        banner = None
-        if port == 80:  # HTTP
-            banner = grab_http_banner(port)
-        elif port == 22:  # SSH
-            banner = grab_ssh_banner(port)
-        return service, banner
+        if protocol == "udp":
+            # UDP services often don't respond, so we use common mappings
+            udp_services = {
+                53: "DNS",
+                67: "DHCP Server",
+                68: "DHCP Client",
+                69: "TFTP",
+                123: "NTP",
+                161: "SNMP",
+                162: "SNMP Trap",
+                500: "ISAKMP",
+                514: "Syslog",
+                520: "RIP",
+                1900: "UPnP",
+            }
+            service = udp_services.get(port, "unknown")
+            return service, None
+        else:
+            service = socket.getservbyport(port)
+            banner = None
+            if port == 80:  # HTTP
+                banner = grab_http_banner(port)
+            elif port == 22:  # SSH
+                banner = grab_ssh_banner(port)
+            return service, banner
     except:
         return "unknown", None
 
-# Banner grabbing functions
+# Banner grabbing functions (TCP)
 def grab_http_banner(port: int) -> Optional[str]:
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -85,14 +103,23 @@ def grab_ssh_banner(port: int) -> Optional[str]:
     except:
         return None
 
-# Scan a single port
-def scan_port(target: str, port: int) -> Optional[Tuple[int, str, Optional[str]]]:
+# Scan a single port (TCP or UDP)
+def scan_port(target: str, port: int, protocol: str = "tcp") -> Optional[Tuple[int, str, Optional[str]]]:
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(TIMEOUT)
-            if s.connect_ex((target, port)) == 0:
-                service, banner = detect_service(port)
-                return port, service, banner
+        if protocol == "udp":
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.settimeout(TIMEOUT)
+                s.sendto(b'', (target, port))  # Empty UDP packet
+                data, _ = s.recvfrom(1024)
+                if data:
+                    service, _ = detect_service(port, "udp")
+                    return port, service, None
+        else:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(TIMEOUT)
+                if s.connect_ex((target, port)) == 0:
+                    service, banner = detect_service(port)
+                    return port, service, banner
     except:
         pass
     return None
@@ -106,25 +133,27 @@ def main() -> None:
     parser.add_argument("target", help="Target IP or domain")
     parser.add_argument("-p", "--ports", default=DEFAULT_PORTS, help="Ports to scan (e.g., '1-1024,8080')")
     parser.add_argument("-t", "--threads", type=int, default=MAX_THREADS, help="Max threads (default: 200)")
+    parser.add_argument("-u", "--udp", action="store_true", help="Enable UDP scanning")
     args = parser.parse_args()
 
     target = validate_target(args.target)
     ports_to_scan = parse_ports(args.ports)
+    protocol = "udp" if args.udp else "tcp"
 
     # Scan info
     print(colored(f"\nTarget: {target}", "cyan"))
-    print(colored(f"Scanning ports: {args.ports}", "cyan"))
+    print(colored(f"Scanning ports: {args.ports} ({protocol.upper()})", "cyan"))
     print(colored(f"Start Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n", "cyan"))
 
     # Threaded scanning
     open_ports = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.threads) as executor:
-        futures = {executor.submit(scan_port, target, port): port for port in ports_to_scan}
+        futures = {executor.submit(scan_port, target, port, protocol): port for port in ports_to_scan}
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
             if result:
                 port, service, banner = result
-                status = colored(f"[+] Port {port}/tcp open", "green")
+                status = colored(f"[+] Port {port}/{protocol} open", "green")
                 service_info = colored(f"Service: {service}", "yellow")
                 print(f"{status} {service_info}")
                 if banner:
@@ -140,7 +169,7 @@ def main() -> None:
 
     # Save results
     with open("scan_results.json", "w") as f:
-        json.dump({"target": target, "open_ports": open_ports}, f, indent=4)
+        json.dump({"target": target, "open_ports": open_ports, "protocol": protocol}, f, indent=4)
     print(colored("\nResults saved to 'scan_results.json'", "cyan"))
 
 if __name__ == "__main__":
