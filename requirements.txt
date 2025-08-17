@@ -1,0 +1,6 @@
+argparse
+socket
+concurrent
+futures
+termcolor
+pyfiglet
